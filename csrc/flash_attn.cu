@@ -49,15 +49,15 @@ __global__ void flash_attn_kernel(
     for (int j = 0; j < Tc; ++j) {
         for (int x = 0; x < d; ++x) {
             // a Block owns Bc threads, and each one copy a head-dim K, V vector into smem
-            K_j[tx * d + x] = K[qkv_offset + (j * TILE_SIZE) + (tx * d) + x];
-            V_j[tx * d + x] = V[qkv_offset + (j * TILE_SIZE) + (tx * d) + x];
+            K_j[(tx * d) + x] = K[qkv_offset + (j * TILE_SIZE) + (tx * d) + x];
+            V_j[(tx * d) + x] = V[qkv_offset + (j * TILE_SIZE) + (tx * d) + x];
         }
         __syncthreads();
 
         for (int i = 0; i < Tr; ++i) {
             for (int x = 0; x < d; ++x) {
                 // each thread copy a head-dim Q vector into smem
-                Q_i[tx * d + x] = Q[qkv_offset + (i * TILE_SIZE) + (tx * d) + x];
+                Q_i[(tx * d) + x] = Q[qkv_offset + (i * TILE_SIZE) + (tx * d) + x];
             }
             // load previous l, m value 
             scalar_t row_m_prev = m[lm_offset + (i * Br) + tx];
@@ -94,13 +94,13 @@ __global__ void flash_attn_kernel(
                 // P_ij * V_j
                 scalar_t pv = 0;
                 for (int y = 0; y < Bc; ++y) {
-                    pv += S[(tx * Bc) + y] * V_j[y * d + x];
+                    pv += S[(tx * Bc) + y] * V_j[(y * d) + x];
                 }
                 // update O online
                 O[qkv_offset + (i * TILE_SIZE) + (tx * d) + x] = (
                     (1 / row_l_new)
                     * (
-                        (row_l_new * __expf(row_m_prev - row_m_new) * O[qkv_offset + (i * TILE_SIZE) + (tx * d) + x])
+                        (row_l_prev * __expf(row_m_prev - row_m_new) * O[qkv_offset + (i * TILE_SIZE) + (tx * d) + x])
                         + (__expf(row_m - row_m_new) * pv)
                         )
                     );
@@ -133,10 +133,12 @@ torch::Tensor toy_flash_attn_cuda(
     int d = Q.size(3);     // head dim
 
     // reshape Q, k, V into {B, nh, Tc, Bc, d} logically
-    int Bc = 32;
-    int Br = 32;
-    int Tr = ceil(N / Br);
-    int Tc = ceil(N / Bc);
+    // int Bc = 32;
+    // int Br = 32;
+    int Bc = 1;
+    int Br = 1;
+    int Tr = ceil(static_cast<float>(N) / Br);
+    int Tc = ceil(static_cast<float>(N) / Bc);
 
 
     auto O = torch::zeros_like(Q, Q.options());
