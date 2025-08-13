@@ -12,7 +12,7 @@ __device__ inline scalar_t* smem_proxy() {
 
 
 template<typename scalar_t>
-__global__ void flash_attn_kernel(
+__global__ void flash_attn_kernel_v1(
     const scalar_t* Q, const scalar_t* K, const scalar_t* V, const int N, const int d,
     const int Tc, const int Tr, const int Bc, const int Br, const scalar_t softmax_scale,
     scalar_t* l, scalar_t* m, scalar_t* O
@@ -161,7 +161,7 @@ torch::Tensor toy_flash_attn_cuda(
 
             int max_sram_size;
             cudaDeviceGetAttribute(&max_sram_size, cudaDevAttrMaxSharedMemoryPerBlock, 0);
-            flash_attn_kernel << <grid_dim, block_dim, smem_size >> > (
+            flash_attn_kernel_v1 << <grid_dim, block_dim, smem_size >> > (
                 Q.data_ptr<scalar_t>(),
                 K.data_ptr<scalar_t>(),
                 V.data_ptr<scalar_t>(),
